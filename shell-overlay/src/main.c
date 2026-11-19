@@ -1288,7 +1288,6 @@ opened:;
     ThumbGridSharedState *stale = (ThumbGridSharedState *)addr;
     stale->sequence = 0;
     stale->ime_active = 0;
-    stale->hider_active = 0;
     stale->hider_x = HIDER_DEFAULT_X;
     stale->hider_y = HIDER_DEFAULT_Y;
     stale->hider_width = HIDER_DEFAULT_W;
