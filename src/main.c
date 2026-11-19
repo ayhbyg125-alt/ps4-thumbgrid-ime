@@ -37,8 +37,20 @@ static bool g_hider_pad_owned = false;
 
 static void hider_publish(void) {
     /* The shell overlay reads the same IPC file used by ThumbGrid. */
-    int fd = sceKernelOpen("/user/data/thumbgrid_ipc.bin", 0x0002, 0);
+    int fd = sceKernelOpen("/user/data/thumbgrid_ipc.bin", 0x0202 /* O_RDWR | O_CREAT */, 0666);
     if (fd < 0) return;
+
+    /* Ensure the shared file is large enough even when IME has never opened it. */
+    if (sceKernelLseek(fd, TG_IPC_FILE_SIZE - 1, 0 /* SEEK_SET */) < 0) {
+        sceKernelClose(fd);
+        return;
+    }
+    char zero = 0;
+    if (sceKernelWrite(fd, &zero, 1) != 1) {
+        sceKernelClose(fd);
+        return;
+    }
+    sceKernelLseek(fd, 0, 0 /* SEEK_SET */);
 
     void *addr = NULL;
     int rc = sceKernelMmap(0, TG_IPC_FILE_SIZE, 0x03, 0x0001, fd, 0, &addr);
