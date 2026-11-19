@@ -12,7 +12,6 @@ jobs:
     runs-on: ubuntu-22.04
 
     env:
-      OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis
       GOLDHEN_SDK: ${{ github.workspace }}/GoldHEN_Plugins_SDK
 
     steps:
@@ -32,15 +31,46 @@ jobs:
             git \
             tar
 
-      - name: Download OpenOrbis PS4 Toolchain v0.5.4
+      - name: Download and locate OpenOrbis PS4 Toolchain v0.5.4
+        shell: bash
         run: |
-          curl -fL --retry 3 \
+          set -euo pipefail
+
+          curl -fL --retry 3 --retry-all-errors \
             https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz \
             -o /tmp/toolchain-llvm-18.tar.gz
-          mkdir -p "${OO_PS4_TOOLCHAIN}"
-          tar -xzf /tmp/toolchain-llvm-18.tar.gz -C "${OO_PS4_TOOLCHAIN}"
+
+          rm -rf "${GITHUB_WORKSPACE}/OpenOrbis"
+          mkdir -p "${GITHUB_WORKSPACE}/OpenOrbis"
+          tar -xzf /tmp/toolchain-llvm-18.tar.gz -C "${GITHUB_WORKSPACE}/OpenOrbis"
+
+          echo "Archive layout:"
+          tar -tzf /tmp/toolchain-llvm-18.tar.gz | head -80
+
+          LINK_X="$(find "${GITHUB_WORKSPACE}/OpenOrbis" -type f -name link.x -print -quit)"
+          CREATE_FSELF="$(find "${GITHUB_WORKSPACE}/OpenOrbis" -type f -path '*/bin/linux/create-fself' -print -quit)"
+
+          test -n "${LINK_X}"
+          test -n "${CREATE_FSELF}"
+
+          TOOLCHAIN_ROOT="$(dirname "${LINK_X}")"
+          test -f "${TOOLCHAIN_ROOT}/link.x"
+          test -x "${CREATE_FSELF}"
+
+          echo "Resolved OpenOrbis root: ${TOOLCHAIN_ROOT}"
+          echo "Resolved create-fself: ${CREATE_FSELF}"
+
+          echo "OO_PS4_TOOLCHAIN=${TOOLCHAIN_ROOT}" >> "${GITHUB_ENV}"
+
+      - name: Verify OpenOrbis toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
           test -f "${OO_PS4_TOOLCHAIN}/link.x"
           test -x "${OO_PS4_TOOLCHAIN}/bin/linux/create-fself"
+          test -x "${OO_PS4_TOOLCHAIN}/bin/linux/clang" || true
+          ls -la "${OO_PS4_TOOLCHAIN}"
+          ls -la "${OO_PS4_TOOLCHAIN}/bin/linux"
 
       - name: Checkout GoldHEN Plugins SDK
         uses: actions/checkout@v4
@@ -50,22 +80,30 @@ jobs:
           fetch-depth: 1
 
       - name: Build GoldHEN Plugins SDK
+        shell: bash
         run: |
+          set -euo pipefail
           make -C "${GOLDHEN_SDK}"
 
       - name: Build game-side PRX
+        shell: bash
         run: |
+          set -euo pipefail
           make clean
           make
 
       - name: Build shell-overlay PRX
+        shell: bash
         working-directory: shell-overlay
         run: |
+          set -euo pipefail
           make clean
           make
 
       - name: Verify PRX outputs
+        shell: bash
         run: |
+          set -euo pipefail
           test -s "${GITHUB_WORKSPACE}/bin/thumbgrid_ime.prx"
           test -s "${GITHUB_WORKSPACE}/shell-overlay/bin/shell_overlay.prx"
           file "${GITHUB_WORKSPACE}/bin/thumbgrid_ime.prx" "${GITHUB_WORKSPACE}/shell-overlay/bin/shell_overlay.prx"
