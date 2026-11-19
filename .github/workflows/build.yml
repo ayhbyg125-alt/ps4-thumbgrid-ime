@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     env:
       GOLDHEN_SDK: ${{ github.workspace }}/GoldHEN_Plugins_SDK
@@ -22,14 +22,26 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang \
-            lld \
-            llvm \
+            clang-18 \
+            lld-18 \
+            llvm-18 \
             make \
             curl \
             ca-certificates \
             git \
             tar
+
+      - name: Select LLVM 18
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo ln -sf /usr/bin/clang-18 /usr/local/bin/clang
+          sudo ln -sf /usr/bin/clang++-18 /usr/local/bin/clang++
+          sudo ln -sf /usr/bin/lld-18 /usr/local/bin/ld.lld
+          sudo ln -sf /usr/bin/llvm-ar-18 /usr/local/bin/llvm-ar
+          clang --version
+          ld.lld --version
+          llvm-ar --version
 
       - name: Download and locate OpenOrbis PS4 Toolchain v0.5.4
         shell: bash
