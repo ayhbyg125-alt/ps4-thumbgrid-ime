@@ -38,6 +38,12 @@ typedef struct ThumbGridSharedState {
     int32_t  offset_x;              /* widget position offset */
     int32_t  offset_y;
     uint32_t shift_active;          /* L2 shift held: 0 or 1 */
+    /* Visual hider state (shell-side PUI rectangle). */
+    uint32_t hider_active;          /* 0=hidden, 1=blackout rectangle visible */
+    int32_t  hider_x;
+    int32_t  hider_y;
+    int32_t  hider_width;
+    int32_t  hider_height;
 } ThumbGridSharedState;
 
 /* --- Sequence counter helpers --- */
