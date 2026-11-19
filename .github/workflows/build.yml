@@ -57,7 +57,8 @@ jobs:
           tar -xzf /tmp/toolchain-llvm-18.tar.gz -C "${GITHUB_WORKSPACE}/OpenOrbis"
 
           echo "Archive layout:"
-          tar -tzf /tmp/toolchain-llvm-18.tar.gz | head -80
+          tar -tzf /tmp/toolchain-llvm-18.tar.gz > /tmp/toolchain-layout.txt
+          head -80 /tmp/toolchain-layout.txt
 
           LINK_X="$(find "${GITHUB_WORKSPACE}/OpenOrbis" -type f -name link.x -print -quit)"
           CREATE_FSELF="$(find "${GITHUB_WORKSPACE}/OpenOrbis" -type f -path '*/bin/linux/create-fself' -print -quit)"
