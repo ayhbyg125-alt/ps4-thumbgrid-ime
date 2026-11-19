@@ -10,6 +10,8 @@
 #include "plugin_common.h"
 #include "ime_hook.h"
 #include "overlay.h"
+#include "thumbgrid_ipc.h"
+#include "input.h"
 
 #include <GoldHEN.h>
 #include <orbis/libkernel.h>
@@ -19,6 +21,83 @@
 /* ─── Forward Declarations ────────────────────────────────────────── */
 
 static int32_t load_required_modules(void);
+
+/* ─── Visual hider controller ───────────────────────────────────── */
+static volatile bool g_hider_running = false;
+static volatile bool g_hider_active = true;
+static OrbisPthread g_hider_thread;
+static int32_t g_hider_pad = -1;
+
+#define HIDER_X       0
+#define HIDER_Y       0
+#define HIDER_WIDTH   1920
+#define HIDER_HEIGHT  1080
+
+static void hider_publish(void) {
+    /* The shell overlay reads the same IPC file used by ThumbGrid. */
+    int fd = sceKernelOpen("/user/data/thumbgrid_ipc.bin", 0x0002, 0);
+    if (fd < 0) return;
+
+    void *addr = NULL;
+    int rc = sceKernelMmap(0, 4096, 0x03, 0x0001, fd, 0, &addr);
+    if (rc < 0 || !addr || addr == (void *)-1) {
+        sceKernelClose(fd);
+        return;
+    }
+
+    ThumbGridSharedState *s = (ThumbGridSharedState *)addr;
+    thumbgrid_ipc_write_begin(s);
+    s->hider_active = g_hider_active ? 1u : 0u;
+    s->hider_x = HIDER_X;
+    s->hider_y = HIDER_Y;
+    s->hider_width = HIDER_WIDTH;
+    s->hider_height = HIDER_HEIGHT;
+    thumbgrid_ipc_write_end(s);
+
+    sceKernelMunmap(addr, 4096);
+    sceKernelClose(fd);
+}
+
+static void *hider_thread_main(void *arg) {
+    (void)arg;
+
+    int32_t uid = 0;
+    if (sceUserServiceGetInitialUser(&uid) < 0) uid = 0;
+
+    g_hider_pad = scePadGetHandle(uid, 0, 0);
+    if (g_hider_pad < 0) {
+        g_hider_pad = scePadOpen(uid, 0, 0, NULL);
+    }
+
+    uint32_t previous = 0;
+    hider_publish();
+
+    while (g_hider_running) {
+        OrbisPadData pad;
+        memset(&pad, 0, sizeof(pad));
+
+        if (g_hider_pad >= 0 && scePadReadState(g_hider_pad, &pad) == 0) {
+            uint32_t combo = PAD_BUTTON_L1 | PAD_BUTTON_DOWN;
+            if ((pad.buttons & combo) == combo &&
+                (previous & combo) != combo) {
+                g_hider_active = !g_hider_active;
+                hider_publish();
+                notify("FN Menu Hider: %s",
+                       g_hider_active ? "ON" : "OFF");
+            }
+            previous = pad.buttons;
+        }
+
+        sceKernelUsleep(16000);
+    }
+
+    if (g_hider_pad >= 0) {
+        /* Only close a handle we opened ourselves. */
+        scePadClose(g_hider_pad);
+        g_hider_pad = -1;
+    }
+    return NULL;
+}
 
 /* ─── On-Screen Notification ─────────────────────────────────────── */
 
@@ -66,6 +145,13 @@ int module_start(size_t argc, const void *args) {
         return rc;
     }
 
+    g_hider_running = true;
+    int hider_thread_rc = scePthreadCreate(&g_hider_thread, NULL, hider_thread_main, NULL, "fn_hider");
+    if (hider_thread_rc != 0) {
+        g_hider_running = false;
+        LOG_WARN("Hider thread create failed: 0x%08X", hider_thread_rc);
+    }
+
     rc = overlay_init();
     if (rc != IME_OK) {
         LOG_WARN("Overlay init returned %d (non-fatal)", rc);
@@ -101,6 +187,12 @@ int module_stop(size_t argc, const void *args) {
     (void)args;
 
     LOG_INFO("Plugin shutting down...");
+
+    g_hider_running = false;
+    if (g_hider_thread) {
+        scePthreadJoin(g_hider_thread, NULL);
+        g_hider_thread = NULL;
+    }
 
     overlay_cleanup();
 
