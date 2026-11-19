@@ -232,6 +232,7 @@ static MonoClass *g_cls_panel  = NULL;
 /* Widget objects */
 static MonoObject *g_border_panel    = NULL;  /* White border behind grid */
 static MonoObject *g_grid_panel      = NULL;  /* Dark main container */
+static MonoObject *g_hider_panel     = NULL;  /* Full-screen visual hider */
 static MonoObject *g_title_label     = NULL;
 static MonoObject *g_text_border     = NULL;  /* White border around text field */
 static MonoObject *g_text_bg         = NULL;  /* Dark text field background */
@@ -288,6 +289,12 @@ static int                      g_ipc_fd  = -1;
 static ThumbGridSharedState           g_cached_state;
 static volatile bool            g_running = false;
 static volatile bool            g_initialized = false;
+
+/* Visual hider defaults. The game-side PRX can override these via IPC. */
+#define HIDER_DEFAULT_X       0
+#define HIDER_DEFAULT_Y       0
+#define HIDER_DEFAULT_W       1920
+#define HIDER_DEFAULT_H       1080
 
 /* ─── Helper: try to open assembly by multiple names ──────────── */
 
@@ -1205,6 +1212,19 @@ static bool build_widget_tree(MonoObject *root) {
 
     LOG("S7: Widget tree built (gc=%d/%d)", g_gc_count, MAX_GC_HANDLES);
 
+    /* ── Visual hider panel ─────────────────────────────────────
+     * Added last so it sits above the IME widgets in the PUI tree. */
+    g_hider_panel = create_panel();
+    if (g_hider_panel) {
+        set_widget_pos(g_hider_panel,
+                       HIDER_DEFAULT_X, HIDER_DEFAULT_Y,
+                       HIDER_DEFAULT_W, HIDER_DEFAULT_H);
+        set_widget_alpha(g_hider_panel, 1.0f);
+        set_panel_bg(g_hider_panel, 0.0f, 0.0f, 0.0f, 1.0f);
+        add_child(root, g_hider_panel);
+        set_widget_visible(g_hider_panel, false);
+    }
+
     /* Start hidden */
     set_widget_visible(g_grid_panel, false);
     if (g_border_panel) set_widget_visible(g_border_panel, false);
@@ -1268,6 +1288,11 @@ opened:;
     ThumbGridSharedState *stale = (ThumbGridSharedState *)addr;
     stale->sequence = 0;
     stale->ime_active = 0;
+    stale->hider_active = 0;
+    stale->hider_x = HIDER_DEFAULT_X;
+    stale->hider_y = HIDER_DEFAULT_Y;
+    stale->hider_width = HIDER_DEFAULT_W;
+    stale->hider_height = HIDER_DEFAULT_H;
 
     LOG("IPC reader: mapped at %p (cleared stale state, seq reset)", addr);
     return true;
@@ -1287,6 +1312,26 @@ static void ipc_reader_close(void) {
 /* ─── Update widgets from IPC state ──────────────────────────── */
 
 static void update_widgets(const ThumbGridSharedState *state) {
+    /* Show/hide the visual hider independently of the IME UI. */
+    if (state->hider_active != g_cached_state.hider_active) {
+        if (g_hider_panel) {
+            set_widget_visible(g_hider_panel, state->hider_active != 0);
+            if (state->hider_active) {
+                MonoClass *cls = g_hider_panel->vtable ? g_hider_panel->vtable->klass : NULL;
+                if (cls) {
+                    set_float_prop(cls, g_hider_panel, "X", (float)state->hider_x);
+                    set_float_prop(cls, g_hider_panel, "Y", (float)state->hider_y);
+                    set_float_prop(cls, g_hider_panel, "Width", (float)state->hider_width);
+                    set_float_prop(cls, g_hider_panel, "Height", (float)state->hider_height);
+                }
+            }
+            LOG("Hider %s (%d,%d %dx%d)",
+                state->hider_active ? "shown" : "hidden",
+                state->hider_x, state->hider_y,
+                state->hider_width, state->hider_height);
+        }
+    }
+
     /* Show/hide grid based on ime_active */
     if (state->ime_active && !g_cached_state.ime_active) {
         if (g_border_panel) set_widget_visible(g_border_panel, true);
