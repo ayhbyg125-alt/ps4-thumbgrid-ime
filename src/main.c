@@ -17,7 +17,9 @@
 #include <orbis/libkernel.h>
 #include <orbis/Sysmodule.h>
 #include <orbis/Pad.h>
+#include <orbis/UserService.h>
 #include <orbis/_types/kernel.h>
+#include <unistd.h>
 
 /* ─── Forward Declarations ────────────────────────────────────────── */
 
