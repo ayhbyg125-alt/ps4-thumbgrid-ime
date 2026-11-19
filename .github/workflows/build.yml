@@ -12,23 +12,35 @@ jobs:
     runs-on: ubuntu-22.04
 
     env:
-      OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis-PS4-Toolchain
+      OO_PS4_TOOLCHAIN: ${{ github.workspace }}/OpenOrbis/PS4Toolchain
       GOLDHEN_SDK: ${{ github.workspace }}/GoldHEN_Plugins_SDK
 
     steps:
       - name: Checkout project
         uses: actions/checkout@v4
 
-      - name: Install build dependencies
+      - name: Install host build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends             clang             lld             llvm             make             curl             ca-certificates             git             tar
+          sudo apt-get install -y --no-install-recommends \
+            clang \
+            lld \
+            llvm \
+            make \
+            curl \
+            ca-certificates \
+            git \
+            tar
 
-      - name: Download OpenOrbis PS4 Toolchain
+      - name: Download OpenOrbis PS4 Toolchain v0.5.4
         run: |
-          mkdir -p "${OO_PS4_TOOLCHAIN}"
-          curl -L --fail --retry 3             "https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/v0.5.4.tar.gz"             -o /tmp/openorbis.tar.gz
-          tar -xzf /tmp/openorbis.tar.gz -C "${OO_PS4_TOOLCHAIN}"
+          curl -fL --retry 3 \
+            https://github.com/OpenOrbis/OpenOrbis-PS4-Toolchain/releases/download/v0.5.4/toolchain-llvm-18.tar.gz \
+            -o /tmp/toolchain-llvm-18.tar.gz
+          mkdir -p "${GITHUB_WORKSPACE}/OpenOrbis"
+          tar -xzf /tmp/toolchain-llvm-18.tar.gz -C "${GITHUB_WORKSPACE}/OpenOrbis"
+          test -f "${OO_PS4_TOOLCHAIN}/link.x"
+          test -x "${OO_PS4_TOOLCHAIN}/bin/linux/create-fself"
 
       - name: Checkout GoldHEN Plugins SDK
         uses: actions/checkout@v4
@@ -39,7 +51,6 @@ jobs:
 
       - name: Build GoldHEN Plugins SDK
         run: |
-          make -C "${GOLDHEN_SDK}" clean
           make -C "${GOLDHEN_SDK}"
 
       - name: Build game-side PRX
@@ -55,10 +66,10 @@ jobs:
 
       - name: Verify PRX outputs
         run: |
-          test -s bin/thumbgrid_ime.prx
-          test -s shell-overlay/bin/shell_overlay.prx
-          file bin/thumbgrid_ime.prx shell-overlay/bin/shell_overlay.prx
-          sha256sum bin/thumbgrid_ime.prx shell-overlay/bin/shell_overlay.prx
+          test -s "${GITHUB_WORKSPACE}/bin/thumbgrid_ime.prx"
+          test -s "${GITHUB_WORKSPACE}/shell-overlay/bin/shell_overlay.prx"
+          file "${GITHUB_WORKSPACE}/bin/thumbgrid_ime.prx" "${GITHUB_WORKSPACE}/shell-overlay/bin/shell_overlay.prx"
+          sha256sum "${GITHUB_WORKSPACE}/bin/thumbgrid_ime.prx" "${GITHUB_WORKSPACE}/shell-overlay/bin/shell_overlay.prx"
 
       - name: Upload PRX artifacts
         uses: actions/upload-artifact@v4
