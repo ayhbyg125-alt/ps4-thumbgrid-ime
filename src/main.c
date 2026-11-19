@@ -17,6 +17,7 @@
 #include <orbis/libkernel.h>
 #include <orbis/Sysmodule.h>
 #include <orbis/Pad.h>
+#include <orbis/_types/kernel.h>
 
 /* ─── Forward Declarations ────────────────────────────────────────── */
 
@@ -67,10 +68,23 @@ static void *hider_thread_main(void *arg) {
     g_hider_pad = scePadGetHandle(uid, 0, 0);
     if (g_hider_pad < 0) {
         g_hider_pad = scePadOpen(uid, 0, 0, NULL);
+        if (g_hider_pad >= 0) g_hider_pad_owned = true;
+    }
+
+    /* Do not expose the hider outside Fortnite. */
+    OrbisAppInfo app_info;
+    memset(&app_info, 0, sizeof(app_info));
+    bool fortnite = false;
+    if (sceKernelGetAppInfo(getpid(), &app_info) == 0) {
+        fortnite = (strncmp(app_info.TitleId, "CUSA07669", sizeof(app_info.TitleId)) == 0);
+        LOG_INFO("Hider title gate: %.10s (%s)", app_info.TitleId,
+                 fortnite ? "Fortnite" : "not Fortnite");
+    } else {
+        LOG_WARN("Hider title gate: sceKernelGetAppInfo failed");
     }
 
     uint32_t previous = 0;
-    hider_publish();
+    if (fortnite) hider_publish();
 
     while (g_hider_running) {
         OrbisPadData pad;
@@ -78,7 +92,8 @@ static void *hider_thread_main(void *arg) {
 
         if (g_hider_pad >= 0 && scePadReadState(g_hider_pad, &pad) == 0) {
             uint32_t combo = PAD_BUTTON_L1 | PAD_BUTTON_DOWN;
-            if ((pad.buttons & combo) == combo &&
+            if (fortnite &&
+                (pad.buttons & combo) == combo &&
                 (previous & combo) != combo) {
                 g_hider_active = !g_hider_active;
                 hider_publish();
@@ -91,11 +106,11 @@ static void *hider_thread_main(void *arg) {
         sceKernelUsleep(16000);
     }
 
-    if (g_hider_pad >= 0) {
-        /* Only close a handle we opened ourselves. */
+    if (g_hider_pad >= 0 && g_hider_pad_owned) {
         scePadClose(g_hider_pad);
-        g_hider_pad = -1;
     }
+    g_hider_pad = -1;
+    g_hider_pad_owned = false;
     return NULL;
 }
 
