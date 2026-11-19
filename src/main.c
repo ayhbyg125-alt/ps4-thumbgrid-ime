@@ -28,6 +28,7 @@ static volatile bool g_hider_running = false;
 static volatile bool g_hider_active = true;
 static OrbisPthread g_hider_thread;
 static int32_t g_hider_pad = -1;
+static bool g_hider_pad_owned = false;
 
 #define HIDER_X       0
 #define HIDER_Y       0
@@ -40,7 +41,7 @@ static void hider_publish(void) {
     if (fd < 0) return;
 
     void *addr = NULL;
-    int rc = sceKernelMmap(0, 4096, 0x03, 0x0001, fd, 0, &addr);
+    int rc = sceKernelMmap(0, TG_IPC_FILE_SIZE, 0x03, 0x0001, fd, 0, &addr);
     if (rc < 0 || !addr || addr == (void *)-1) {
         sceKernelClose(fd);
         return;
@@ -55,7 +56,7 @@ static void hider_publish(void) {
     s->hider_height = HIDER_HEIGHT;
     thumbgrid_ipc_write_end(s);
 
-    sceKernelMunmap(addr, 4096);
+    sceKernelMunmap(addr, TG_IPC_FILE_SIZE);
     sceKernelClose(fd);
 }
 
