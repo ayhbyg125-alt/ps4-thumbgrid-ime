@@ -99,7 +99,13 @@ static void *hider_thread_main(void *arg) {
     }
 
     uint32_t previous = 0;
-    if (fortnite) hider_publish();
+    /* CUSA07669-specific fallback: draw directly into Fortnite's VideoOut
+     * framebuffer. This does not depend on the SceShellUI PUI path. */
+    overlay_set_hider_active(fortnite && g_hider_active);
+    if (fortnite) {
+        hider_publish();
+        notify("FN Menu Hider: CUSA07669 framebuffer hider READY");
+    }
 
     while (g_hider_running) {
         OrbisPadData pad;
@@ -111,6 +117,7 @@ static void *hider_thread_main(void *arg) {
                 (pad.buttons & combo) == combo &&
                 (previous & combo) != combo) {
                 g_hider_active = !g_hider_active;
+                overlay_set_hider_active(g_hider_active);
                 hider_publish();
                 notify("FN Menu Hider: %s",
                        g_hider_active ? "ON" : "OFF");
