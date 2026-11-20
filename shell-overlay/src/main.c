@@ -1754,7 +1754,7 @@ static int shell_overlay_init(void) {
 
 static void *init_thread(void *arg) {
     (void)arg;
-    sceKernelUsleep(1000000);  /* 1s settle delay */
+    sceKernelUsleep(100000);   /* 100ms settle delay: keep startup overlay responsive */
     int ret = shell_overlay_init();
     LOG("Init done rc=%d", ret);
     return NULL;
