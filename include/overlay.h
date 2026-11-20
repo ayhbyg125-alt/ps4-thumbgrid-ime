@@ -21,6 +21,7 @@ typedef void (*overlay_draw_cb_t)(uint32_t *fb, uint32_t pitch,
 int32_t overlay_init(void);
 void    overlay_cleanup(void);
 void    overlay_set_draw_callback(overlay_draw_cb_t cb);
+void    overlay_set_hider_active(bool active); /* CUSA07669 visual blackout */
 bool    overlay_is_active(void);      /* true if framebuffers have been captured */
 int32_t overlay_get_tiling_mode(void);  /* 0=TILE, 1=LINEAR */
 bool    overlay_is_flipping(void);   /* true if game is actively flipping (recent submitFlip) */
