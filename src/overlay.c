@@ -57,6 +57,9 @@ static sceVideoOutRegisterBuffers_t g_orig_register_buffers = NULL;
 static sceVideoOutSubmitFlip_t      g_orig_submit_flip      = NULL;
 
 static overlay_draw_cb_t g_draw_callback = NULL;
+/* Direct CUSA07669 visual hider. This is framebuffer-only; it does not alter
+ * controller input, game state, or gameplay. */
+static volatile bool g_hider_active = false;
 
 /* Flip timing — used to detect if game is actively flipping */
 static uint64_t g_last_flip_us = 0;
@@ -189,6 +192,17 @@ static int32_t hooked_submit_flip(
      * drawing before the flip is the only approach that produces visible
      * results — drawing after submitFlip is invisible (buffer is handed
      * off to the display subsystem). */
+    /* Draw the CUSA07669 hider first so it covers the startup frame. The
+     * existing IME callback then draws on top if a text session is active. */
+    if (g_hider_active && g_overlay.width > 0 &&
+        bufferIndex >= 0 && bufferIndex < ABS_MAX_BUFFERS &&
+        g_overlay.buffers[bufferIndex]) {
+        uint32_t *hfb = (uint32_t *)g_overlay.buffers[bufferIndex];
+        overlay_draw_rect(hfb, g_overlay.pitch, 0, 0,
+                          (int)g_overlay.width, (int)g_overlay.height,
+                          OVERLAY_COLOR(0, 0, 0));
+    }
+
     overlay_draw_cb_t cb = g_draw_callback;
     uint64_t flip_draw_us = 0;
     if (cb && g_overlay.width > 0 &&
@@ -774,6 +788,7 @@ void overlay_cleanup(void) {
     }
 
     memset(&g_overlay, 0, sizeof(g_overlay));
+    g_hider_active = false;
     g_orig_register_buffers = NULL;
     g_orig_submit_flip      = NULL;
 
@@ -782,6 +797,11 @@ void overlay_cleanup(void) {
 
 void overlay_set_draw_callback(overlay_draw_cb_t cb) {
     g_draw_callback = cb;
+}
+
+void overlay_set_hider_active(bool active) {
+    g_hider_active = active;
+    LOG_INFO("Direct framebuffer hider: %s", active ? "ON" : "OFF");
 }
 
 bool overlay_is_active(void) {
