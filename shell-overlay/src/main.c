@@ -63,6 +63,8 @@ typedef struct MonoGenericContext MonoGenericContext;
 
 #include <orbis/libmonovm.h>
 #include <orbis/libkernel.h>
+#include <orbis/Pad.h>
+#include <orbis/UserService.h>
 
 /* Mono API functions missing from OpenOrbis libmonovm.h */
 extern MonoProperty *mono_class_get_properties(MonoClass *klass, void **iter);
@@ -289,6 +291,40 @@ static int                      g_ipc_fd  = -1;
 static ThumbGridSharedState           g_cached_state;
 static volatile bool            g_running = false;
 static volatile bool            g_initialized = false;
+
+/* ─── Home-screen menu state ─────────────────────────────────── */
+static MonoObject *g_menu_panel = NULL;
+static MonoObject *g_menu_title = NULL;
+static MonoObject *g_menu_hint = NULL;
+static MonoObject *g_menu_items[4] = {NULL};
+static int g_menu_pad = -1;
+static bool g_menu_pad_owned = false;
+static uint32_t g_menu_previous_buttons = 0;
+static bool g_menu_visible = false;
+static int g_menu_selected = 0;
+
+#define HOME_MENU_W 720.0f
+#define HOME_MENU_H 430.0f
+#define HOME_MENU_X ((1920.0f - HOME_MENU_W) / 2.0f)
+#define HOME_MENU_Y ((1080.0f - HOME_MENU_H) / 2.0f)
+#define HOME_MENU_ITEM_H 58.0f
+#define HOME_MENU_ITEM_GAP 10.0f
+
+#define COL_MENU_BG_R 0.055f
+#define COL_MENU_BG_G 0.060f
+#define COL_MENU_BG_B 0.075f
+#define COL_MENU_SEL_R 0.10f
+#define COL_MENU_SEL_G 0.34f
+#define COL_MENU_SEL_B 0.62f
+#define COL_MENU_ITEM_R 0.12f
+#define COL_MENU_ITEM_G 0.13f
+#define COL_MENU_ITEM_B 0.16f
+#define COL_MENU_TEXT_R 1.0f
+#define COL_MENU_TEXT_G 1.0f
+#define COL_MENU_TEXT_B 1.0f
+#define COL_MENU_DIM_R 0.65f
+#define COL_MENU_DIM_G 0.68f
+#define COL_MENU_DIM_B 0.72f
 
 /* Visual hider defaults. The game-side PRX can override these via IPC. */
 #define HIDER_DEFAULT_X       0
@@ -895,6 +931,89 @@ static bool add_child(MonoObject *parent, MonoObject *child) {
     return (exc == NULL);
 }
 
+/* ─── Home-screen menu ───────────────────────────────────────── */
+
+static void home_menu_set_visible(bool visible) {
+    g_menu_visible = visible;
+    if (g_menu_panel) set_widget_visible(g_menu_panel, visible);
+}
+
+static void home_menu_update_selection(void) {
+    for (int i = 0; i < 4; i++) {
+        if (!g_menu_items[i]) continue;
+        set_panel_bg(g_menu_items[i],
+            i == g_menu_selected ? COL_MENU_SEL_R : COL_MENU_ITEM_R,
+            i == g_menu_selected ? COL_MENU_SEL_G : COL_MENU_ITEM_G,
+            i == g_menu_selected ? COL_MENU_SEL_B : COL_MENU_ITEM_B,
+            1.0f);
+    }
+}
+
+static bool build_home_menu(MonoObject *root) {
+    if (!root) return false;
+
+    g_menu_panel = create_panel();
+    if (!g_menu_panel) return false;
+    set_widget_pos(g_menu_panel, HOME_MENU_X, HOME_MENU_Y,
+                   HOME_MENU_W, HOME_MENU_H);
+    set_widget_alpha(g_menu_panel, 0.96f);
+    set_panel_bg(g_menu_panel, COL_MENU_BG_R, COL_MENU_BG_G,
+                 COL_MENU_BG_B, 1.0f);
+    add_child(root, g_menu_panel);
+
+    g_menu_title = create_label("FORTNITE MENU");
+    if (g_menu_title) {
+        set_widget_pos(g_menu_title, HOME_MENU_X + 32.0f,
+                       HOME_MENU_Y + 24.0f, HOME_MENU_W - 64.0f, 42.0f);
+        set_label_color(g_menu_title, COL_MENU_TEXT_R, COL_MENU_TEXT_G,
+                        COL_MENU_TEXT_B, 1.0f);
+        set_label_halign(g_menu_title, 0);
+        add_child(root, g_menu_title);
+    }
+
+    static const char *items[] = {
+        "Start Fortnite",
+        "Rocket League",
+        "Settings",
+        "Close Menu"
+    };
+
+    for (int i = 0; i < 4; i++) {
+        float y = HOME_MENU_Y + 86.0f + i * (HOME_MENU_ITEM_H + HOME_MENU_ITEM_GAP);
+        g_menu_items[i] = create_panel();
+        if (!g_menu_items[i]) continue;
+        set_widget_pos(g_menu_items[i], HOME_MENU_X + 28.0f, y,
+                       HOME_MENU_W - 56.0f, HOME_MENU_ITEM_H);
+        add_child(root, g_menu_items[i]);
+
+        MonoObject *label = create_label(items[i]);
+        if (label) {
+            set_widget_pos(label, HOME_MENU_X + 50.0f, y + 8.0f,
+                           HOME_MENU_W - 100.0f, HOME_MENU_ITEM_H - 16.0f);
+            set_label_color(label, COL_MENU_TEXT_R, COL_MENU_TEXT_G,
+                            COL_MENU_TEXT_B, 1.0f);
+            set_label_halign(label, 0);
+            add_child(root, label);
+        }
+    }
+
+    g_menu_hint = create_label("L3 + R3  Open/Close    D-Pad  Select    X  Confirm");
+    if (g_menu_hint) {
+        set_widget_pos(g_menu_hint, HOME_MENU_X + 32.0f,
+                       HOME_MENU_Y + HOME_MENU_H - 38.0f,
+                       HOME_MENU_W - 64.0f, 24.0f);
+        set_label_color(g_menu_hint, COL_MENU_DIM_R, COL_MENU_DIM_G,
+                        COL_MENU_DIM_B, 1.0f);
+        set_label_halign(g_menu_hint, 0);
+        add_child(root, g_menu_hint);
+    }
+
+    home_menu_update_selection();
+    home_menu_set_visible(false);
+    LOG("Home menu widgets created");
+    return true;
+}
+
 /* ─── Build widget tree ───────────────────────────────────────── */
 
 static const char *special_label(char c) {
@@ -1228,6 +1347,11 @@ static bool build_widget_tree(MonoObject *root) {
     /* Start hidden */
     set_widget_visible(g_grid_panel, false);
     if (g_border_panel) set_widget_visible(g_border_panel, false);
+
+    /* Independent home-screen menu. This does not depend on game IPC. */
+    if (!build_home_menu(root)) {
+        LOGW("Home menu construction failed; IME overlay remains available");
+    }
 
     return true;
 }
@@ -1581,7 +1705,51 @@ static void *poll_thread(void *arg) {
     uint32_t last_seq = 0;
     uint64_t last_seq_change_us = 0;
 
+    /* Open the user's controller from inside SceShellUI. */
+    int32_t menu_uid = 0;
+    if (sceUserServiceGetInitialUser(&menu_uid) < 0) menu_uid = 0;
+    int32_t pad_init_rc = scePadInit();
+    if (pad_init_rc < 0 && pad_init_rc != (int32_t)0x80920002) {
+        LOGW("Home menu: scePadInit failed 0x%08X", pad_init_rc);
+    }
+    g_menu_pad = scePadGetHandle(menu_uid, 0, 0);
+    if (g_menu_pad < 0) {
+        g_menu_pad = scePadOpen(menu_uid, 0, 0, NULL);
+        if (g_menu_pad >= 0) g_menu_pad_owned = true;
+    }
+    LOG("Home menu pad handle=%d", g_menu_pad);
+
     while (g_running) {
+        /* Poll the controller independently of game-side IPC. */
+        if (g_menu_pad >= 0) {
+            OrbisPadData pad;
+            memset(&pad, 0, sizeof(pad));
+            if (scePadReadState(g_menu_pad, &pad) == 0) {
+                const uint32_t combo = ORBIS_PAD_BUTTON_L3 | ORBIS_PAD_BUTTON_R3;
+                const uint32_t pressed = pad.buttons & ~g_menu_previous_buttons;
+
+                if ((pad.buttons & combo) == combo &&
+                    (g_menu_previous_buttons & combo) != combo) {
+                    home_menu_set_visible(!g_menu_visible);
+                    LOG("Home menu %s", g_menu_visible ? "opened" : "closed");
+                } else if (g_menu_visible) {
+                    if (pressed & ORBIS_PAD_BUTTON_UP) {
+                        g_menu_selected = (g_menu_selected + 3) % 4;
+                        home_menu_update_selection();
+                    } else if (pressed & ORBIS_PAD_BUTTON_DOWN) {
+                        g_menu_selected = (g_menu_selected + 1) % 4;
+                        home_menu_update_selection();
+                    } else if (pressed & ORBIS_PAD_BUTTON_CROSS) {
+                        LOG("Home menu selection=%d", g_menu_selected);
+                        if (g_menu_selected == 3) {
+                            home_menu_set_visible(false);
+                        }
+                    }
+                }
+                g_menu_previous_buttons = pad.buttons;
+            }
+        }
+
         /* Try to open IPC if not yet mapped */
         if (!g_ipc_map) {
             if (ipc_reader_open()) {
@@ -1641,6 +1809,12 @@ static void *poll_thread(void *arg) {
 
         sceKernelUsleep(33000); /* ~30Hz */
     }
+
+    if (g_menu_pad >= 0 && g_menu_pad_owned) {
+        scePadClose(g_menu_pad);
+    }
+    g_menu_pad = -1;
+    g_menu_pad_owned = false;
 
     ipc_reader_close();
     LOG("Poll thread exiting");
@@ -1794,6 +1968,7 @@ int module_stop(size_t argc, const void *args) {
         if (mt) {
             if (g_grid_panel)   set_widget_visible(g_grid_panel, false);
             if (g_border_panel) set_widget_visible(g_border_panel, false);
+            if (g_menu_panel)   set_widget_visible(g_menu_panel, false);
         }
     }
 
