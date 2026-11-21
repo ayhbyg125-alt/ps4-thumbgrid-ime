@@ -1293,7 +1293,7 @@ opened:;
     stale->hider_width = HIDER_DEFAULT_W;
     stale->hider_height = HIDER_DEFAULT_H;
 
-    LOG("IPC reader: mapped at %p (cleared stale state, seq reset)", addr);
+    LOG("IPC reader: mapped at %p (preserved hider state, seq reset)", addr);
     return true;
 }
 
