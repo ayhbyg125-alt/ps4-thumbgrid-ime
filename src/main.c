@@ -40,15 +40,20 @@ static bool g_hider_pad_owned = false;
 static void hider_publish(void) {
     /* The shell overlay reads the same IPC file used by ThumbGrid. */
     int fd = sceKernelOpen(TG_IPC_PATH, 0x0202 /* O_RDWR | O_CREAT */, 0666);
-    if (fd < 0) return;
+    if (fd < 0) {
+        LOG_ERROR("Hider IPC open failed: %s rc=0x%08X", TG_IPC_PATH, fd);
+        return;
+    }
 
     /* Ensure the shared file is large enough even when IME has never opened it. */
     if (sceKernelLseek(fd, TG_IPC_FILE_SIZE - 1, 0 /* SEEK_SET */) < 0) {
+        LOG_ERROR("Hider IPC resize seek failed");
         sceKernelClose(fd);
         return;
     }
     char zero = 0;
     if (sceKernelWrite(fd, &zero, 1) != 1) {
+        LOG_ERROR("Hider IPC resize write failed");
         sceKernelClose(fd);
         return;
     }
@@ -57,6 +62,7 @@ static void hider_publish(void) {
     void *addr = NULL;
     int rc = sceKernelMmap(0, TG_IPC_FILE_SIZE, 0x03, 0x0001, fd, 0, &addr);
     if (rc < 0 || !addr || addr == (void *)-1) {
+        LOG_ERROR("Hider IPC mmap failed rc=0x%08X", rc);
         sceKernelClose(fd);
         return;
     }
@@ -69,6 +75,7 @@ static void hider_publish(void) {
     s->hider_width = HIDER_WIDTH;
     s->hider_height = HIDER_HEIGHT;
     thumbgrid_ipc_write_end(s);
+    LOG_INFO("Hider IPC published active=%u path=%s", s->hider_active, TG_IPC_PATH);
 
     sceKernelMunmap(addr, TG_IPC_FILE_SIZE);
     sceKernelClose(fd);
@@ -101,7 +108,9 @@ static void *hider_thread_main(void *arg) {
     uint32_t previous = 0;
     /* CUSA07669-specific fallback: draw directly into Fortnite's VideoOut
      * framebuffer. This does not depend on the SceShellUI PUI path. */
-    overlay_set_hider_active(fortnite && g_hider_active);\n    LOG_INFO("Hider framebuffer state: fortnite=%d active=%d overlay=%d",\n             fortnite, g_hider_active, overlay_is_active());
+    overlay_set_hider_active(fortnite && g_hider_active);
+    LOG_INFO("Hider framebuffer state: fortnite=%d active=%d overlay=%d",
+             fortnite, g_hider_active, overlay_is_active());
     if (fortnite) {
         hider_publish();
         notify("FN Menu Hider: CUSA07669 READY");
