@@ -39,7 +39,7 @@ static bool g_hider_pad_owned = false;
 
 static void hider_publish(void) {
     /* The shell overlay reads the same IPC file used by ThumbGrid. */
-    int fd = sceKernelOpen("/user/data/thumbgrid_ipc.bin", 0x0202 /* O_RDWR | O_CREAT */, 0666);
+    int fd = sceKernelOpen(TG_IPC_PATH, 0x0202 /* O_RDWR | O_CREAT */, 0666);
     if (fd < 0) return;
 
     /* Ensure the shared file is large enough even when IME has never opened it. */
@@ -101,10 +101,10 @@ static void *hider_thread_main(void *arg) {
     uint32_t previous = 0;
     /* CUSA07669-specific fallback: draw directly into Fortnite's VideoOut
      * framebuffer. This does not depend on the SceShellUI PUI path. */
-    overlay_set_hider_active(fortnite && g_hider_active);
+    overlay_set_hider_active(fortnite && g_hider_active);\n    LOG_INFO("Hider framebuffer state: fortnite=%d active=%d overlay=%d",\n             fortnite, g_hider_active, overlay_is_active());
     if (fortnite) {
         hider_publish();
-        notify("FN Menu Hider: CUSA07669 framebuffer hider READY");
+        notify("FN Menu Hider: CUSA07669 READY");
     }
 
     while (g_hider_running) {
