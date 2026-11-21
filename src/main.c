@@ -191,16 +191,19 @@ int module_start(size_t argc, const void *args) {
         return rc;
     }
 
+    /* Install VideoOut hooks before starting the CUSA07669 hider thread.
+     * This removes the startup race where the hider could publish/enable
+     * before the framebuffer hooks were ready. */
+    rc = overlay_init();
+    if (rc != IME_OK) {
+        LOG_WARN("Overlay init returned %d (non-fatal)", rc);
+    }
+
     g_hider_running = true;
     int hider_thread_rc = scePthreadCreate(&g_hider_thread, NULL, hider_thread_main, NULL, "fn_hider");
     if (hider_thread_rc != 0) {
         g_hider_running = false;
         LOG_WARN("Hider thread create failed: 0x%08X", hider_thread_rc);
-    }
-
-    rc = overlay_init();
-    if (rc != IME_OK) {
-        LOG_WARN("Overlay init returned %d (non-fatal)", rc);
     }
 
     /* Load shell overlay into SceShellUI for PUI-based rendering.
