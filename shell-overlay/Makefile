@@ -64,7 +64,9 @@ LDFLAGS := \
 LIBS := \
 	-lkernel \
 	-lSceLibcInternal \
-	-lmonosgen
+	-lmonosgen \
+	-lScePad \
+	-lSceUserService
 
 CRT := $(GOLDHEN_SDK)/build/crtprx.o
 
