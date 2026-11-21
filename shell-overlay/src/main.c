@@ -1240,8 +1240,8 @@ static bool ipc_reader_open(void) {
     /* Try multiple paths — /user/data/ first since it's shared across
      * process sandboxes (game and SceShellUI can both access it) */
     static const char *ipc_paths[] = {
+        TG_IPC_PATH,
         "/user/data/thumbgrid_ipc.bin",
-        "/data/thumbgrid_ipc.bin",
         "/tmp/thumbgrid_ipc.bin",
         NULL
     };
@@ -1285,13 +1285,9 @@ opened:;
      * - sequence=0: ensures even value so reader protocol works.
      *   If a previous game crashed mid-write, sequence could be stuck
      *   at odd, which makes thumbgrid_ipc_read reject ALL reads permanently. */
+    /* Do not mutate publisher-owned hider state on shell attach. */
     ThumbGridSharedState *stale = (ThumbGridSharedState *)addr;
-    stale->sequence = 0;
     stale->ime_active = 0;
-    stale->hider_x = HIDER_DEFAULT_X;
-    stale->hider_y = HIDER_DEFAULT_Y;
-    stale->hider_width = HIDER_DEFAULT_W;
-    stale->hider_height = HIDER_DEFAULT_H;
 
     LOG("IPC reader: mapped at %p (publisher state preserved)", addr);
     return true;
