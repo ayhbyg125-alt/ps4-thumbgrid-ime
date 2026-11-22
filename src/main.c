@@ -12,6 +12,7 @@
 #include "overlay.h"
 #include "thumbgrid_ipc.h"
 #include "input.h"
+#include "menu.h"
 
 #include <GoldHEN.h>
 #include <orbis/libkernel.h>
