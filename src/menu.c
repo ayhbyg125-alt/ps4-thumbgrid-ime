@@ -17,6 +17,7 @@
 #include "plugin_common.h"
 
 #include <string.h>
+#include <orbis/Pad.h>
 
 #define MENU_COUNT       4
 #define MENU_W           700
