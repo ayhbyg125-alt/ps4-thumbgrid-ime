@@ -38,7 +38,7 @@ static void game_overlay_draw_callback(uint32_t *fb, uint32_t pitch,
 
 /* ─── Visual hider controller ───────────────────────────────────── */
 static volatile bool g_hider_running = false;
-static volatile bool g_hider_active = true;
+static volatile bool g_hider_active = false;
 static OrbisPthread g_hider_thread;
 static int32_t g_hider_pad = -1;
 static bool g_hider_pad_owned = false;
