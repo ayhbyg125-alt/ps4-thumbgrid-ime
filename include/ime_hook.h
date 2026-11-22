@@ -93,4 +93,8 @@ int32_t ime_hook_install(void);
 int32_t ime_hook_remove(void);
 const ImeHookState *ime_hook_get_state(void);
 
+/* Draw the active ThumbGrid into the shared game framebuffer, if active. */
+void ime_overlay_draw(uint32_t *fb, uint32_t pitch,
+                      uint32_t width, uint32_t height);
+
 #endif /* IME_HOOK_H */
