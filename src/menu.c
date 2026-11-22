@@ -15,9 +15,7 @@
 #include "menu.h"
 #include "overlay.h"
 #include "plugin_common.h"
-
-#include <string.h>
-#include <orbis/Pad.h>
+#include "input.h"
 
 #define MENU_COUNT       4
 #define MENU_W           700
@@ -57,6 +55,7 @@ void menu_poll(uint32_t buttons)
 {
     const uint32_t toggle = PAD_BUTTON_R1 | PAD_BUTTON_SQUARE;
 
+    /* Toggle once per R1+Square chord instead of once per frame. */
     if ((buttons & toggle) == toggle &&
         (g_previous_buttons & toggle) != toggle) {
         g_visible = !g_visible;
@@ -102,7 +101,6 @@ void menu_draw(uint32_t *fb, uint32_t pitch,
     const uint32_t white    = OVERLAY_COLOR(255, 255, 255);
     const uint32_t dim      = OVERLAY_COLOR(170, 175, 185);
 
-    /* Outer panel. */
     overlay_draw_rect(fb, pitch, x, y, MENU_W, MENU_H, border);
     overlay_draw_rect(fb, pitch, x + 2, y + 2, MENU_W - 4, MENU_H - 4, bg);
 
