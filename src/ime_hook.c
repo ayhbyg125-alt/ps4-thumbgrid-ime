@@ -990,7 +990,6 @@ int32_t ime_hook_remove(void) {
 
     /* Clean up any active session */
     if (g_custom_active) {
-        overlay_set_draw_callback(NULL);
         ime_hook_close_pad();
         g_custom_active = false;
     }
