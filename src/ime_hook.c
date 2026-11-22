@@ -313,6 +313,13 @@ static void thumbgrid_draw_callback(uint32_t *fb, uint32_t pitch,
     thumbgrid_draw(&g_tgrid, &g_session, fb, pitch, width, height);
 }
 
+/* Public bridge used by the permanent game overlay callback. */
+void ime_overlay_draw(uint32_t *fb, uint32_t pitch,
+                      uint32_t width, uint32_t height)
+{
+    thumbgrid_draw_callback(fb, pitch, width, height);
+}
+
 /* ─── Notification Fallback Display ───────────────────────────────── */
 
 /**
@@ -990,7 +997,6 @@ int32_t ime_hook_remove(void) {
 
     /* Clean up any active session */
     if (g_custom_active) {
-        overlay_set_draw_callback(NULL);
         ime_hook_close_pad();
         g_custom_active = false;
     }

@@ -12,6 +12,7 @@
 #include "overlay.h"
 #include "thumbgrid_ipc.h"
 #include "input.h"
+#include "menu.h"
 
 #include <GoldHEN.h>
 #include <orbis/libkernel.h>
@@ -25,9 +26,20 @@
 
 static int32_t load_required_modules(void);
 
+static void game_overlay_draw_callback(uint32_t *fb, uint32_t pitch,
+                                       uint32_t width, uint32_t height);
+
+/* Combined framebuffer renderer: existing ThumbGrid IME + independent menu. */
+static void game_overlay_draw_callback(uint32_t *fb, uint32_t pitch,
+                                       uint32_t width, uint32_t height)
+{
+    ime_overlay_draw(fb, pitch, width, height);
+    menu_draw(fb, pitch, width, height);
+}
+
 /* ─── Visual hider controller ───────────────────────────────────── */
 static volatile bool g_hider_running = false;
-static volatile bool g_hider_active = true;
+static volatile bool g_hider_active = false;
 static OrbisPthread g_hider_thread;
 static int32_t g_hider_pad = -1;
 static bool g_hider_pad_owned = false;
@@ -121,6 +133,11 @@ static void *hider_thread_main(void *arg) {
         memset(&pad, 0, sizeof(pad));
 
         if (g_hider_pad >= 0 && scePadReadState(g_hider_pad, &pad) == 0) {
+            /* Reuse the existing game pad sample for the independent menu. */
+            if (fortnite) {
+                menu_poll(pad.buttons);
+            }
+
             uint32_t combo = PAD_BUTTON_L1 | PAD_BUTTON_DOWN;
             if (fortnite &&
                 (pad.buttons & combo) == combo &&
@@ -199,6 +216,10 @@ int module_start(size_t argc, const void *args) {
         LOG_WARN("Overlay init returned %d (non-fatal)", rc);
     }
 
+    /* One permanent game framebuffer callback. The menu is independent of
+     * the IME/Slate path and can therefore be tested in Fortnite directly. */
+    overlay_set_draw_callback(game_overlay_draw_callback);
+
     g_hider_running = true;
     int hider_thread_rc = scePthreadCreate(&g_hider_thread, NULL, hider_thread_main, NULL, "fn_hider");
     if (hider_thread_rc != 0) {
@@ -243,6 +264,7 @@ int module_stop(size_t argc, const void *args) {
         g_hider_thread = NULL;
     }
 
+    overlay_set_draw_callback(NULL);
     overlay_cleanup();
 
     int32_t rc = ime_hook_remove();
